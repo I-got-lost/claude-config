@@ -10,6 +10,8 @@
 !skills/**
 !output-styles/
 !output-styles/**
+!scripts/
+!scripts/**
 
 # Track root files
 !README.md

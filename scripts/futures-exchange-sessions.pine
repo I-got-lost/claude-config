@@ -1,0 +1,285 @@
+//@version=5
+indicator(title="Futures Exchange Sessions 3.0", shorttitle="_Boxes", overlay=true, max_boxes_count=200)
+
+// Purpose: Shows session boxes for Shanghai, London, and New York futures markets.
+//          Times are entered in each market's LOCAL timezone — no timezone conversion needed.
+//          Also includes a customizable horizontal time line.
+
+// Usage:   Enter session start and end times in the timezone shown in each section's label.
+//          Toggle each box on/off and customize colors, borders, and text.
+
+// Notes:   Boxes and time lines only display when the chart timeframe is < 60 minutes.
+//          To turn off box text set the text color opacity to 0%.
+
+
+///////////////////////////////////////////////////////////////////////////////// CONSTANTS
+
+c_milliseconds_in_day = 24 * 60 * 60 * 1000
+
+// Market timezones — fixed per market, no user input required
+TZ_SHANGHAI = "Asia/Shanghai"
+TZ_LONDON   = "Europe/London"
+TZ_NEW_YORK = "America/New_York"
+
+// Default session times in each market's LOCAL timezone
+// Shanghai: futures morning session (CST, UTC+8)
+// London:   London kill zone (GMT/BST)
+// New York: New York kill zone (ET)
+c_shanghai_session  = '0900-1300'
+c_london_session    = '0800-1000'
+c_new_york_session  = '0700-0959'
+
+
+///////////////////////////////////////////////////////////////////////////////// INPUTS
+
+// Tooltips
+c_tip_days = "If nothing changes when adjusting Days Back, you may be stepping through a weekend or holiday. Keep incrementing/decrementing — boxes will appear within 2–3 clicks."
+c_tip_box1 = "Enter times in Shanghai local time (CST, UTC+8). Example: 0900-1300 means 9:00 AM to 1:00 PM Shanghai time."
+c_tip_box2 = "Enter times in London local time (GMT/BST). Example: 0800-1000 means 8:00 AM to 10:00 AM London time."
+c_tip_box3 = "Enter times in New York local time (ET). Example: 0700-0959 means 7:00 AM to 9:59 AM New York time."
+c_tip_line = "Enter times in the selected timezone. The horizontal line is drawn at the price when the session begins."
+
+var string GDTB = "Dynamic Time Boxes"
+i_display_days_back = input.int(defval=15, minval=1, maxval=80, title="Display Only 🔢 Days Back", group=GDTB, tooltip=c_tip_days)
+
+
+//--- Box 1: Shanghai
+var string G1 = "First Box — Shanghai (CST, UTC+8)"
+i_1st_box_toggle       = input.bool(defval=false,                   title="First Box On/Off    ", group=G1, inline="first_toggle")
+i_1st_box_bgcolor      = input.color(defval=color.new(#e65100, 80), title="Fill Color",            group=G1, inline="first_toggle")
+i_1st_box_session      = input.session(defval=c_shanghai_session,   title="Session (Shanghai Time)", group=G1, tooltip=c_tip_box1)
+i_1st_box_text         = input.string(defval="Shanghai",            title="Box Text Label",         group=G1)
+i_1st_box_border_color = input.color(defval=color.new(#131722, 80), title="Border       ",          group=G1, inline="first_border")
+i_1st_box_border_width = input.int(defval=2, minval=1, maxval=20,   title="",                       group=G1, inline="first_border")
+i_1st_box_border_style = input.string(defval="solid (─)",           title="", options=["solid (─)", "dotted (┈)", "dashed (╌)"], group=G1, inline="first_border")
+
+
+//--- Box 2: London
+var string G2 = "Second Box — London (GMT/BST)"
+i_2nd_box_toggle       = input.bool(defval=false,                   title="Second Box On/Off   ", group=G2, inline="second_toggle")
+i_2nd_box_bgcolor      = input.color(defval=color.new(#f06292, 80), title="Fill Color",            group=G2, inline="second_toggle")
+i_2nd_box_session      = input.session(defval=c_london_session,     title="Session (London Time)", group=G2, tooltip=c_tip_box2)
+i_2nd_box_text         = input.string(defval="London",              title="Box Text Label",        group=G2)
+i_2nd_box_border_color = input.color(defval=color.new(#131722, 80), title="Border       ",         group=G2, inline="second_border")
+i_2nd_box_border_width = input.int(defval=2, minval=1, maxval=20,   title="",                      group=G2, inline="second_border")
+i_2nd_box_border_style = input.string(defval="solid (─)",           title="", options=["solid (─)", "dotted (┈)", "dashed (╌)"], group=G2, inline="second_border")
+
+
+//--- Box 3: New York
+var string G3 = "Third Box — New York (ET)"
+i_3rd_box_toggle       = input.bool(defval=false,                   title="Third Box On/Off    ", group=G3, inline="third_toggle")
+i_3rd_box_bgcolor      = input.color(defval=color.new(#7b1fa2, 80), title="Fill Color",            group=G3, inline="third_toggle")
+i_3rd_box_session      = input.session(defval=c_new_york_session,   title="Session (New York Time)", group=G3, tooltip=c_tip_box3)
+i_3rd_box_text         = input.string(defval="New York",            title="Box Text Label",          group=G3)
+i_3rd_box_border_color = input.color(defval=color.new(#131722, 80), title="Border       ",           group=G3, inline="third_border")
+i_3rd_box_border_width = input.int(defval=2, minval=1, maxval=20,   title="",                        group=G3, inline="third_border")
+i_3rd_box_border_style = input.string(defval="solid (─)",           title="", options=["solid (─)", "dotted (┈)", "dashed (╌)"], group=G3, inline="third_border")
+
+
+//--- Box text (shared across all boxes)
+var string GT = "Box Text (All Boxes)"
+i_box_text_color = input.color(defval=color.new(#131722, 20), title=" Text Style ",  group=GT, inline="text_style")
+i_box_text_size  = input.string(defval="Normal", title="", options=["Tiny", "Small", "Normal", "Large", "Huge", "Auto"], group=GT, inline="text_style")
+i_box_textv_v    = input.string(defval="Top",    title=" Text Position", options=["Top", "Center", "Bottom"], group=GT, inline="text_pos")
+i_box_text_h     = input.string(defval="Left",   title="", options=["Left", "Center", "Right"], group=GT, inline="text_pos")
+
+
+//--- Horizontal Line
+var string L1 = "Horizontal Line"
+i_1st_line_toggle       = input.bool(defval=false,                   title="Line On/Off",  group=L1)
+i_1st_line_label_toggle = input.bool(defval=false,                   title="Label On/Off", group=L1)
+i_1st_line_start_day    = input.string(defval="America/New_York",    title="Timezone", options=["America/New_York", "Europe/London", "Asia/Shanghai"], group=L1, tooltip=c_tip_line)
+i_1st_line_session      = input.session(defval='0100-1659',          title="Line Start & End Times", group=L1)
+i_1st_line_color        = input.color(defval=color.new(#b22833, 20), title="Line & Label Color", group=L1)
+i_1st_line_style        = input.string(defval="solid (─)",           title="Style", options=["solid (─)", "dotted (┈)", "dashed (╌)"], group=L1, inline="line")
+i_1st_text_color        = input.string(defval="White",               title="", options=["Black", "White"], group=L1, inline="line")
+i_1st_line_width        = input.int(defval=2, minval=1, maxval=20,   title="", group=L1, inline="line")
+
+
+///////////////////////////////////////////////////////////////////////////////// DAYS BACK CALCULATION
+
+lastBarDate        = timestamp(year(timenow), month(timenow), dayofmonth(timenow), hour(timenow), minute(timenow), second(timenow))
+thisBarDate        = timestamp(year, month, dayofmonth, hour, minute, second)
+daysLeft           = math.floor((lastBarDate - thisBarDate) / c_milliseconds_in_day)
+in_days_back_range = daysLeft < i_display_days_back
+
+
+///////////////////////////////////////////////////////////////////////////////// HELPER FUNCTIONS
+
+line_style_function(input_var) =>
+    switch input_var
+        "dotted (┈)" => line.style_dotted
+        "dashed (╌)" => line.style_dashed
+        => line.style_solid
+
+text_color_function(string_color) =>
+    switch string_color
+        "Black" => color.black
+        "White" => color.white
+        => color.black
+
+text_size_function(string_size) =>
+    switch string_size
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Normal" => size.normal
+        "Large"  => size.large
+        "Huge"   => size.huge
+        "Auto"   => size.auto
+
+text_valign_function(string_v) =>
+    switch string_v
+        "Top"    => text.align_top
+        "Center" => text.align_center
+        "Bottom" => text.align_bottom
+
+text_halign_function(string_h) =>
+    switch string_h
+        "Left"   => text.align_left
+        "Center" => text.align_center
+        "Right"  => text.align_right
+
+
+///////////////////////////////////////////////////////////////////////////////// SESSION BOX DRAWING
+
+box_text_size = text_size_function(i_box_text_size)
+box_textv_v   = text_valign_function(i_box_textv_v)
+box_text_h    = text_halign_function(i_box_text_h)
+
+// Master display gate: respect days-back setting and only show on sub-60-minute charts
+display_allowed = in_days_back_range and timeframe.isminutes and timeframe.multiplier < 60
+
+
+//------------------------------------
+// 1st BOX — Shanghai (CST)
+// Session times entered in Shanghai local time; timezone applied automatically.
+//------------------------------------
+
+// True on every bar that falls inside the Shanghai session window
+first_box_in_session    = not na(time(timeframe.period, i_1st_box_session, TZ_SHANGHAI))
+// True only on the first bar of each session instance
+first_box_session_start = first_box_in_session and not first_box_in_session[1]
+first_box_border_style  = line_style_function(i_1st_box_border_style)
+
+var box   first_box  = na
+var float first_high = 0.0
+var float first_low  = 0.0
+
+if display_allowed and i_1st_box_toggle
+    if first_box_session_start
+        // Session just started — initialize box at this bar's prices
+        first_high := high
+        first_low  := low
+        first_box  := box.new(
+             left=bar_index, top=first_high, right=bar_index + 1, bottom=first_low,
+             xloc=xloc.bar_index,
+             text=i_1st_box_text,
+             text_color=i_box_text_color, text_halign=box_text_h, text_valign=box_textv_v, text_size=box_text_size,
+             border_color=i_1st_box_border_color, border_width=i_1st_box_border_width, border_style=first_box_border_style,
+             bgcolor=i_1st_box_bgcolor)
+    else if first_box_in_session
+        // Session ongoing — expand box to track high/low range
+        first_high := math.max(first_high, high)
+        first_low  := math.min(first_low, low)
+        box.set_right(first_box, bar_index)
+        box.set_top(first_box, first_high)
+        box.set_bottom(first_box, first_low)
+
+
+//------------------------------------
+// 2nd BOX — London (GMT/BST)
+// Session times entered in London local time; timezone applied automatically.
+//------------------------------------
+
+second_box_in_session    = not na(time(timeframe.period, i_2nd_box_session, TZ_LONDON))
+second_box_session_start = second_box_in_session and not second_box_in_session[1]
+second_box_border_style  = line_style_function(i_2nd_box_border_style)
+
+var box   second_box  = na
+var float second_high = 0.0
+var float second_low  = 0.0
+
+if display_allowed and i_2nd_box_toggle
+    if second_box_session_start
+        second_high := high
+        second_low  := low
+        second_box  := box.new(
+             left=bar_index, top=second_high, right=bar_index + 1, bottom=second_low,
+             xloc=xloc.bar_index,
+             text=i_2nd_box_text,
+             text_color=i_box_text_color, text_halign=box_text_h, text_valign=box_textv_v, text_size=box_text_size,
+             border_color=i_2nd_box_border_color, border_width=i_2nd_box_border_width, border_style=second_box_border_style,
+             bgcolor=i_2nd_box_bgcolor)
+    else if second_box_in_session
+        second_high := math.max(second_high, high)
+        second_low  := math.min(second_low, low)
+        box.set_right(second_box, bar_index)
+        box.set_top(second_box, second_high)
+        box.set_bottom(second_box, second_low)
+
+
+//------------------------------------
+// 3rd BOX — New York (ET)
+// Session times entered in New York local time; timezone applied automatically.
+//------------------------------------
+
+third_box_in_session    = not na(time(timeframe.period, i_3rd_box_session, TZ_NEW_YORK))
+third_box_session_start = third_box_in_session and not third_box_in_session[1]
+third_box_border_style  = line_style_function(i_3rd_box_border_style)
+
+var box   third_box  = na
+var float third_high = 0.0
+var float third_low  = 0.0
+
+if display_allowed and i_3rd_box_toggle
+    if third_box_session_start
+        third_high := high
+        third_low  := low
+        third_box  := box.new(
+             left=bar_index, top=third_high, right=bar_index + 1, bottom=third_low,
+             xloc=xloc.bar_index,
+             text=i_3rd_box_text,
+             text_color=i_box_text_color, text_halign=box_text_h, text_valign=box_textv_v, text_size=box_text_size,
+             border_color=i_3rd_box_border_color, border_width=i_3rd_box_border_width, border_style=third_box_border_style,
+             bgcolor=i_3rd_box_bgcolor)
+    else if third_box_in_session
+        third_high := math.max(third_high, high)
+        third_low  := math.min(third_low, low)
+        box.set_right(third_box, bar_index)
+        box.set_top(third_box, third_high)
+        box.set_bottom(third_box, third_low)
+
+
+///////////////////////////////////////////////////////////////////////////////// HORIZONTAL TIME LINE
+
+// Line uses whichever timezone the user selects in the dropdown
+first_line_in_session    = not na(time(timeframe.period, i_1st_line_session, i_1st_line_start_day))
+first_line_session_start = first_line_in_session and not first_line_in_session[1]
+
+first_line_style      = line_style_function(i_1st_line_style)
+first_line_text_color = text_color_function(i_1st_text_color)
+
+var line  line_first       = na
+var label label_first      = na
+var float price_first_line = na
+
+if display_allowed and i_1st_line_toggle
+    if first_line_session_start
+        // Create a new line at the session-open price
+        line_first := line.new(
+             x1=bar_index, y1=open, x2=bar_index + 1, y2=open,
+             color=i_1st_line_color, style=first_line_style, width=i_1st_line_width)
+    else if first_line_in_session
+        // Extend the line rightward each bar
+        line.set_x2(line_first, bar_index)
+
+        if i_1st_line_label_toggle
+            price_first_line := line.get_price(line_first, bar_index)
+            label_first := label.new(
+                 x=bar_index + 5, y=price_first_line,
+                 text=str.tostring(price_first_line), xloc=xloc.bar_index,
+                 color=i_1st_line_color, textcolor=first_line_text_color,
+                 tooltip=str.tostring(i_1st_line_session))
+            label.delete(label_first[1])
+
+/////////////////////////////////////////////////////////////////////////////////

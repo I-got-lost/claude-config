@@ -1,0 +1,82 @@
+//@version=5
+indicator("Global Market Sessions", overlay=true, max_bars_back=500)
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SETTINGS
+//  Each session has an enable toggle and a color picker on the same line.
+//  All session times are defined in the exchange's LOCAL timezone — Pine Script
+//  automatically handles DST transitions via IANA timezone names.
+// ══════════════════════════════════════════════════════════════════════════════
+
+var string GRP = "Market Sessions"
+
+show_sydney    = input.bool(true, "Sydney    (ASX)          ", group=GRP, inline="syd")
+col_sydney     = input.color(color.new(#00BCD4, 82), "",        group=GRP, inline="syd")
+
+show_tokyo     = input.bool(true, "Tokyo     (TSE)          ", group=GRP, inline="tok")
+col_tokyo      = input.color(color.new(#FF9800, 82), "",        group=GRP, inline="tok")
+
+show_shanghai  = input.bool(true, "Shanghai  (SSE)          ", group=GRP, inline="sha")
+col_shanghai   = input.color(color.new(#F44336, 82), "",        group=GRP, inline="sha")
+
+show_hk        = input.bool(true, "Hong Kong (HKEX)         ", group=GRP, inline="hk")
+col_hk         = input.color(color.new(#9C27B0, 82), "",        group=GRP, inline="hk")
+
+show_frankfurt = input.bool(true, "Frankfurt (XETRA)        ", group=GRP, inline="fra")
+col_frankfurt  = input.color(color.new(#FFD600, 82), "",        group=GRP, inline="fra")
+
+show_london    = input.bool(true, "London    (LSE)          ", group=GRP, inline="lon")
+col_london     = input.color(color.new(#4CAF50, 82), "",        group=GRP, inline="lon")
+
+show_newyork   = input.bool(true, "New York  (NYSE / NASDAQ)", group=GRP, inline="ny")
+col_newyork    = input.color(color.new(#2196F3, 82), "",        group=GRP, inline="ny")
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SESSION DETECTION
+//
+//  Markets with a midday lunch break require two separate time() checks joined
+//  with `or`.  The third argument is the IANA timezone name so Pine Script
+//  resolves DST automatically — no manual UTC offset adjustments needed.
+//
+//  Reference hours (all local exchange time):
+//    Sydney    ASX   — 10:00–16:00  AEST/AEDT  (Australia/Sydney)
+//    Tokyo     TSE   — 09:00–11:30, 12:30–15:30 JST (Asia/Tokyo)
+//    Shanghai  SSE   — 09:30–11:30, 13:00–15:00 CST (Asia/Shanghai)
+//    Hong Kong HKEX  — 09:30–12:00, 13:00–16:00 HKT (Asia/Hong_Kong)
+//    Frankfurt XETRA — 09:00–17:30  CET/CEST   (Europe/Berlin)
+//    London    LSE   — 08:00–16:30  GMT/BST    (Europe/London)
+//    New York  NYSE  — 09:30–16:00  EST/EDT    (America/New_York)
+// ══════════════════════════════════════════════════════════════════════════════
+
+in_sydney    = not na(time(timeframe.period, "1000-1600", "Australia/Sydney"))
+
+in_tokyo     = not na(time(timeframe.period, "0900-1130", "Asia/Tokyo")) or
+               not na(time(timeframe.period, "1230-1530", "Asia/Tokyo"))
+
+in_shanghai  = not na(time(timeframe.period, "0930-1130", "Asia/Shanghai")) or
+               not na(time(timeframe.period, "1300-1500", "Asia/Shanghai"))
+
+in_hk        = not na(time(timeframe.period, "0930-1200", "Asia/Hong_Kong")) or
+               not na(time(timeframe.period, "1300-1600", "Asia/Hong_Kong"))
+
+in_frankfurt = not na(time(timeframe.period, "0900-1730", "Europe/Berlin"))
+
+in_london    = not na(time(timeframe.period, "0800-1630", "Europe/London"))
+
+in_newyork   = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  BACKGROUND RENDERING
+//
+//  bgcolor() calls stack — overlapping sessions naturally blend their colors,
+//  making session overlaps (e.g. London/New York) visually distinct.
+//  Using `na` instead of a color makes that session's layer invisible.
+// ══════════════════════════════════════════════════════════════════════════════
+
+bgcolor(show_sydney    and in_sydney    ? col_sydney    : na, title="Sydney (ASX)")
+bgcolor(show_tokyo     and in_tokyo     ? col_tokyo     : na, title="Tokyo (TSE)")
+bgcolor(show_shanghai  and in_shanghai  ? col_shanghai  : na, title="Shanghai (SSE)")
+bgcolor(show_hk        and in_hk        ? col_hk        : na, title="Hong Kong (HKEX)")
+bgcolor(show_frankfurt and in_frankfurt ? col_frankfurt : na, title="Frankfurt (XETRA)")
+bgcolor(show_london    and in_london    ? col_london    : na, title="London (LSE)")
+bgcolor(show_newyork   and in_newyork   ? col_newyork   : na, title="New York (NYSE/NASDAQ)")
